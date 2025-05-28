@@ -39,7 +39,6 @@ pub struct TemplateApp {
   output_path: PathBuf,
   selected_format: AudioFormat,
   processing: bool,
-  progress: f32,
   #[allow(dead_code)]
   runtime: tokio::runtime::Handle,
   error: Option<String>,
@@ -56,7 +55,6 @@ impl Default for TemplateApp {
         .join("craig-out"),
       selected_format: AudioFormat::FLAC,
       processing: false,
-      progress: 0.0,
       runtime,
       error: None,
       resources: None,
@@ -92,7 +90,7 @@ impl eframe::App for TemplateApp {
       // Show error message at the top if there is one
       if let Some(error) = &self.error {
         ui.colored_label(egui::Color32::RED, error);
-        ui.add_space(16.0);
+        ui.add_space(32.0);
       } else {
         ui.horizontal(|ui| {
           ui.label("Output folder:");

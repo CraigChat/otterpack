@@ -14,7 +14,7 @@ pub enum PackSource {
 }
 
 const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
-const MAX_SEARCH_SIZE: u64 = 10 * 1024 * 1024; // Look for ZIP signature in last 10MB
+const MAX_SEARCH_SIZE: u64 = 10 * 1024 * 1024; // Look for ZIP signature in the first 10MB
 
 pub fn find_pack_source() -> Result<PackSource> {
   if cfg!(debug_assertions) {
@@ -48,8 +48,6 @@ pub fn find_pack_source() -> Result<PackSource> {
       // Found ZIP header - read until end of file
       let zip_start = pos;
       let zip_size = file_size - pos;
-
-      println!("FOUND HEADER: {exe_path:?}, {zip_start:?}, {zip_size:?}");
 
       return Ok(PackSource::EmbeddedZip {
         exe_path,
@@ -94,7 +92,7 @@ fn extract_zip_contents(source: &PackSource) -> Result<tempfile::TempDir> {
       let mut archive = zip::ZipArchive::new(cursor).context("Failed to read ZIP data")?;
 
       // Create temporary directory
-      let temp_dir = tempfile::Builder::new().prefix("otterpack").tempdir()?;
+      let temp_dir = tempfile::Builder::new().prefix("otterpack-").tempdir()?;
 
       // Extract only root-level files from the ZIP
       for i in 0..archive.len() {
@@ -165,8 +163,4 @@ pub fn setup_resources() -> Result<ExtractedResources> {
       })
     }
   }
-}
-
-pub fn get_ffmpeg_path(resources: &ExtractedResources) -> PathBuf {
-  resources.resource_path.join("ffmpeg.exe")
 }
