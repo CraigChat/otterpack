@@ -2,3 +2,5 @@
 /_*
 *.flac
 *.exe
+*.upx
+*.bat
