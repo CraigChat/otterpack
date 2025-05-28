@@ -18,6 +18,7 @@ tokio = { version = "1.28", features = ["full"] }
 strum = { version = "0.26", features = ["derive"] }
 tempfile = "3.5"
 zip = "0.6"
+opener = { version = "0.8.2", features = ["reveal"] }
 
 [profile.dev.package.otterpack]
 opt-level = 0 
