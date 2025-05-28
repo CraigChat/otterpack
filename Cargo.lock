@@ -1992,11 +1992,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "otterpack-cli"
-version = "0.1.0"
-
-[[package]]
-name = "otterpack-exe"
+name = "otterpack"
 version = "0.1.0"
 dependencies = [
  "anyhow",

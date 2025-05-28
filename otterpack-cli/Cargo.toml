@@ -1,7 +1,0 @@
-[package]
-name = "otterpack-cli"
-version = "0.1.0"
-edition = "2024"
-authors = ["Snazzah <me@snazzah.com>"]
-
-[dependencies]

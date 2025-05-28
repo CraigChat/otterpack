@@ -1,6 +1,26 @@
-[workspace]
-members = ["otterpack-cli", "otterpack-exe"]
-resolver = "2"
+[package]
+name = "otterpack"
+version = "0.1.0"
+edition = "2024"
+authors = ["Snazzah <me@snazzah.com>"]
 
-[workspace.dependencies]
+[dependencies]
 anyhow = "1.0"
+clap = { version = "4.3", features = ["derive"] }
+egui = "0.31"
+eframe = { version = "0.31", default-features = false, features = [
+    # "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+] }
+rfd = "0.11"
+env_logger = "0.11.8"
+tokio = { version = "1.28", features = ["full"] }
+strum = { version = "0.26", features = ["derive"] }
+tempfile = "3.5"
+zip = "0.6"
+
+[profile.dev.package.otterpack]
+opt-level = 0 
+
+[profile.dev.package."*"]
+opt-level = 3
