@@ -14,12 +14,13 @@ enum AppStatus {
 
 pub struct TemplateApp {
   status: AppStatus,
-  dynaudnorm: bool,
   output_path: PathBuf,
-  selected_format: AudioFormat,
   runtime: tokio::runtime::Handle,
   resources: Option<crate::self_extract::ExtractedResources>,
   completion_rx: Option<mpsc::UnboundedReceiver<ProcessProgress>>,
+  selected_format: AudioFormat,
+  dynaudnorm: bool,
+  mix: bool,
 }
 
 impl Default for TemplateApp {
@@ -27,7 +28,9 @@ impl Default for TemplateApp {
     let runtime = tokio::runtime::Handle::current();
     let mut app = Self {
       status: AppStatus::Ready,
-      dynaudnorm: false,
+      runtime,
+      resources: None,
+      completion_rx: None,
       output_path: {
         let folder = if cfg!(debug_assertions) {
           "out".to_string()
@@ -40,9 +43,8 @@ impl Default for TemplateApp {
         std::env::current_dir().unwrap_or_default().join(folder)
       },
       selected_format: AudioFormat::FLAC,
-      runtime,
-      resources: None,
-      completion_rx: None,
+      dynaudnorm: false,
+      mix: false,
     };
 
     // Extract and validate resources at startup
@@ -119,8 +121,11 @@ impl eframe::App for TemplateApp {
 
           ui.add_space(8.0);
 
+          ui.checkbox(&mut self.mix, "Mix into single track")
+            .on_hover_text("Mix all tracks into one file");
+
           ui.checkbox(&mut self.dynaudnorm, "Automatically level volume")
-            .on_hover_text("Normalize audio volume using ffmpeg's dynaudnorm filter");
+            .on_hover_text("Normalize audio volume using FFmpeg's dynaudnorm filter");
         });
 
         ui.separator();
@@ -139,11 +144,12 @@ impl eframe::App for TemplateApp {
               let output_path = self.output_path.clone();
               let format = self.selected_format;
               let use_dynaudnorm = self.dynaudnorm;
+              let mix = self.mix;
 
               // Spawn the async task
               self.runtime.spawn(async move {
                 if let Err(e) =
-                  process_files(resource_path, output_path, format, use_dynaudnorm).await
+                  process_files(resource_path, output_path, format, use_dynaudnorm, mix).await
                 {
                   eprintln!("Error processing files: {}", e);
                   let _ = completion_tx.send(ProcessProgress::Error(e));
@@ -169,7 +175,7 @@ impl eframe::App for TemplateApp {
           }
         } else if self.status == AppStatus::Done {
           ui.heading("Finished processing files!");
-          ui.add_space(8.0);
+          ui.add_space(4.0);
           ui.horizontal(|ui| {
             if ui.button("Open output folder").clicked() {
               let _ = opener::reveal(&self.output_path);

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, process::Stdio};
 
 use strum::EnumIter;
 use tokio::process::Command;
@@ -51,6 +51,7 @@ pub async fn process_files(
   output_path: PathBuf,
   format: AudioFormat,
   use_dynaudnorm: bool,
+  mix: bool,
 ) -> anyhow::Result<()> {
   // Create output directory if it doesn't exist
   tokio::fs::create_dir_all(&output_path).await?;
@@ -72,36 +73,107 @@ pub async fn process_files(
     }
   }
 
-  for input_path in flac_files {
-    let output_filename = input_path
-      .file_name()
-      .ok_or_else(|| anyhow::anyhow!("Invalid input filename"))?
-      .to_str()
-      .ok_or_else(|| anyhow::anyhow!("Invalid input filename encoding"))?
-      .replace(".flac", &format!(".{}", format.extension()));
-
-    let output_path = output_path.join(output_filename);
-
-    println!("Converting {:?} to {:?}", input_path, output_path);
+  if mix && !flac_files.is_empty() {
+    // Mix all tracks into one file
+    println!("Mixing {} tracks together", flac_files.len());
+    
+    // Create the filter complex string in chunks of 32 files
+    let mut filter = String::new();
+    let mut mix_filter = String::new();
 
     let mut command = Command::new(&ffmpeg);
-    command.arg("-y").arg("-i").arg(&input_path);
+    command.arg("-y");
+    
+    // Add all input files
+    let mut co = 0;
+    let mut mixes = 0;
+    let mix_extra = {
+      if use_dynaudnorm {
+        ",dynaudnorm"
+      } else {
+        ""
+      }
+    };
+    for (i, file) in flac_files.iter().enumerate() {
+      command.arg("-i").arg(file);
+      let input_filter = {
+        if use_dynaudnorm {
+          "dynaudnorm"
+        } else {
+          "anull"
+        }
+      };
+      filter.push_str(&format!("[{i}:a]{input_filter}[aud{co}];"));
+      mix_filter.push_str(&format!("[aud{co}]"));
+      co += 1;
 
-    // Add dynaudnorm filter if enabled
-    if use_dynaudnorm {
-      command.args(&["-af", "dynaudnorm"]);
+        
+      // amix can only mix 32 at a time
+      if co >= 32 {
+        filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[mix{mixes}]"));
+        mix_filter.push_str(&format!("[aud{mixes}]"));
+        co = 1;
+        mixes += 1;
+      }
     }
 
+    filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[aud]"));
+    command.args(&["-filter_complex", &filter]);
+    command.args(&["-map", "[aud]"]);
+    
     // Add format-specific encoder args
     command.args(format.ffmpeg_args());
-
-    // Add output path
-    command.arg(&output_path);
-
-    let status = command.status().await?;
-
+    
+    // Set output path
+    let mut mix_output = output_path.join("craig");
+    mix_output.set_extension(format.extension());
+    command.arg(&mix_output);
+    
+    println!("Running mix command");
+    let status = command
+      .stdout(Stdio::null())
+      .stderr(Stdio::null())
+      .status()
+      .await?;
+      
     if !status.success() {
-      return Err(anyhow::anyhow!("ffmpeg failed with status: {}", status));
+      return Err(anyhow::anyhow!("ffmpeg mixing failed with status: {}", status));
+    }
+  } else {
+    // Process files individually
+    for input_path in flac_files {
+      let mut output_path = output_path.join(
+        input_path
+          .file_name()
+          .ok_or_else(|| anyhow::anyhow!("Invalid input filename"))?,
+      );
+      output_path.set_extension(format.extension());
+
+      println!("Converting {:?} to {:?}", input_path, output_path);
+
+      let mut command = Command::new(&ffmpeg);
+      command.arg("-y").arg("-i").arg(&input_path);
+
+      // Add dynaudnorm filter if enabled
+      if use_dynaudnorm {
+        command.args(&["-af", "dynaudnorm"]);
+      }
+
+      // Add format-specific encoder args
+      command.args(format.ffmpeg_args());
+
+      // Add output path
+      command.arg(&output_path);
+
+      let status = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await?;
+
+      if !status.success() {
+        return Err(anyhow::anyhow!("ffmpeg failed with status: {}", status));
+      }
     }
   }
 
