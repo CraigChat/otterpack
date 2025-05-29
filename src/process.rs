@@ -86,7 +86,6 @@ pub async fn process_files(
     
     // Add all input files
     let mut co = 0;
-    let mut mixes = 0;
     let mix_extra = {
       if use_dynaudnorm {
         ",dynaudnorm"
@@ -110,10 +109,9 @@ pub async fn process_files(
         
       // amix can only mix 32 at a time
       if co >= 32 {
-        filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[mix{mixes}]"));
-        mix_filter.push_str(&format!("[aud{mixes}]"));
+        filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[aud{co}];"));
+        mix_filter = format!("[aud{co}]") ;
         co = 1;
-        mixes += 1;
       }
     }
 
