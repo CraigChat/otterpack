@@ -197,7 +197,7 @@ impl eframe::App for TemplateApp {
           ui.hyperlink_to("Craig", "https://craig.chat");
           ui.label(" using ");
           ui.hyperlink_to("otterpack", "https://github.com/CraigChat/otterpack");
-          ui.label(egui::RichText::new(format!(" ({}) ", env!("CARGO_PKG_VERSION"))).small());
+          ui.label(egui::RichText::new(format!(" ({})", env!("CARGO_PKG_VERSION"))).small());
           ui.label(".");
         });
         egui::warn_if_debug_build(ui);

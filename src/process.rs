@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Stdio};
+use std::path::PathBuf;
 
 use strum::EnumIter;
 use tokio::process::Command;
@@ -141,8 +141,6 @@ pub async fn process_files(
 
     println!("Running mix command");
     let status = command
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
       .status()
       .await?;
 
@@ -177,8 +175,6 @@ pub async fn process_files(
       command.arg(&file_output_path);
 
       let status = command
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
         .status()
         .await?;
 
