@@ -127,40 +127,43 @@ pub struct ExtractedResources {
   pub resource_path: PathBuf,
 }
 
-pub fn setup_resources() -> Result<ExtractedResources> {
-  let source = find_pack_source()?;
+pub async fn setup_resources() -> Result<ExtractedResources> {
+  tokio::task::spawn_blocking(|| {
+    let source = find_pack_source()?;
 
-  match source {
-    PackSource::DebugFolder(path) => {
-      // Validate debug folder contents
-      let ffmpeg_path = path.join("ffmpeg.exe");
-      if !ffmpeg_path.exists() {
-        anyhow::bail!(
-          "ffmpeg.exe not found in debug folder at {}",
-          ffmpeg_path.display()
-        );
+    match source {
+      PackSource::DebugFolder(path) => {
+        // Validate debug folder contents
+        let ffmpeg_path = path.join("ffmpeg.exe");
+        if !ffmpeg_path.exists() {
+          anyhow::bail!(
+            "ffmpeg.exe not found in debug folder at {}",
+            ffmpeg_path.display()
+          );
+        }
+
+        Ok(ExtractedResources {
+          temp_dir: None,
+          resource_path: path,
+        })
       }
+      PackSource::EmbeddedZip { .. } => {
+        // Extract and validate contents
+        let temp_dir = extract_zip_contents(&source)?;
 
-      Ok(ExtractedResources {
-        temp_dir: None,
-        resource_path: path,
-      })
-    }
-    PackSource::EmbeddedZip { .. } => {
-      // Extract and validate contents
-      let temp_dir = extract_zip_contents(&source)?;
+        // Validate the extracted contents
+        let ffmpeg_path = temp_dir.path().join("ffmpeg.exe");
+        if !ffmpeg_path.exists() {
+          anyhow::bail!("ffmpeg.exe not found in extracted resources");
+        }
 
-      // Validate the extracted contents
-      let ffmpeg_path = temp_dir.path().join("ffmpeg.exe");
-      if !ffmpeg_path.exists() {
-        anyhow::bail!("ffmpeg.exe not found in extracted resources");
+        let resource_path = temp_dir.path().to_owned();
+        Ok(ExtractedResources {
+          temp_dir: Some(temp_dir),
+          resource_path,
+        })
       }
-
-      let resource_path = temp_dir.path().to_owned();
-      Ok(ExtractedResources {
-        temp_dir: Some(temp_dir),
-        resource_path,
-      })
     }
-  }
+  })
+  .await?
 }
