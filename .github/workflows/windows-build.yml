@@ -49,13 +49,13 @@ jobs:
         .\upx.exe --best --lzma "otterpack-upx.exe"
 
     - name: Upload regular build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: otterpack
         path: target/release/otterpack.exe
 
     - name: Upload UPX build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: otterpack-upx
         path: otterpack-upx.exe

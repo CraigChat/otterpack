@@ -42,10 +42,7 @@ impl AudioFormat {
   }
 
   pub fn is_project_format(&self) -> bool {
-    match self {
-      AudioFormat::Audacity => true,
-      _ => false
-    }
+    matches!(self, AudioFormat::Audacity)
   }
 }
 
@@ -61,7 +58,7 @@ pub static AUP_HEADER: &str = concat!(
   "<project xmlns=\"http://audacity.sourceforge.net/xml/\" projname=\"Craig\" version=\"1.3.0\" audacityversion=\"2.2.2\" rate=\"48000.0\">\n"
 );
 
-pub static AUP_FOLDER_NAME: &'static str = "craig_data";
+pub static AUP_FOLDER_NAME: &str = "craig_data";
 
 pub async fn process_files(
   resource_path: PathBuf,
@@ -139,8 +136,8 @@ pub async fn process_files(
     }
 
     filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[aud]"));
-    command.args(&["-filter_complex", &filter]);
-    command.args(&["-map", "[aud]"]);
+    command.args(["-filter_complex", &filter]);
+    command.args(["-map", "[aud]"]);
 
     command.args(format.ffmpeg_args());
 
@@ -175,7 +172,7 @@ pub async fn process_files(
       command.arg("-y").arg("-i").arg(&input_path);
 
       if use_dynaudnorm {
-        command.args(&["-af", "dynaudnorm"]);
+        command.args(["-af", "dynaudnorm"]);
       }
 
       command.args(format.ffmpeg_args());
