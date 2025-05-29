@@ -36,29 +36,18 @@ jobs:
     - name: Build Release
       run: cargo build --release
 
-    - name: Install UPX
-      run: |
-        $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v4.2.1/upx-4.2.1-win64.zip" -OutFile "upx.zip"
-        Expand-Archive "upx.zip" -DestinationPath "upx"
-        Copy-Item "upx\upx-4.2.1-win64\upx.exe" -Destination "."
+    - name: Run UPX
+      uses: crazy-max/ghaction-upx@v3
+      with:
+        version: latest
+        files: target\release\otterpack.exe
+        args: --best --lzma
 
-    - name: Create UPX compressed build
-      run: |
-        Copy-Item "target\release\otterpack.exe" -Destination "otterpack-upx.exe"
-        .\upx.exe --best --lzma "otterpack-upx.exe"
-
-    - name: Upload regular build
+    - name: Upload build
       uses: actions/upload-artifact@v4
       with:
         name: otterpack
         path: target/release/otterpack.exe
-
-    - name: Upload UPX build
-      uses: actions/upload-artifact@v4
-      with:
-        name: otterpack-upx
-        path: otterpack-upx.exe
 
     - name: Upload Release Assets
       if: github.event_name == 'release'
@@ -66,4 +55,3 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh release upload ${{ github.event.release.tag_name }} target/release/otterpack.exe#otterpack.exe
-        gh release upload ${{ github.event.release.tag_name }} otterpack-upx.exe#otterpack-upx.exe
