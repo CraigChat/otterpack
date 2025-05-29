@@ -14,7 +14,8 @@ fn main() -> eframe::Result {
     viewport: egui::ViewportBuilder::default()
       .with_inner_size([500.0, 200.0])
       .with_min_inner_size([500.0, 200.0])
-      .with_icon(IconData::default()),
+      .with_icon(IconData::default())
+      .with_active(true),
     ..Default::default()
   };
   eframe::run_native(

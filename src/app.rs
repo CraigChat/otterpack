@@ -170,6 +170,7 @@ impl eframe::App for TemplateApp {
               } else {
                 self.status = AppStatus::Done;
               }
+              ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Critical));
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
           }
