@@ -6,6 +6,7 @@ use tokio::process::Command;
 #[derive(Debug, Clone, Copy, PartialEq, EnumIter)]
 pub enum AudioFormat {
   FLAC,
+  Audacity,
   WAV,
   AAC,
   ALAC,
@@ -14,7 +15,7 @@ pub enum AudioFormat {
 impl AudioFormat {
   fn extension(&self) -> &'static str {
     match self {
-      AudioFormat::FLAC => "flac",
+      AudioFormat::FLAC | AudioFormat::Audacity => "flac",
       AudioFormat::WAV => "wav",
       AudioFormat::AAC => "m4a",
       AudioFormat::ALAC => "m4a",
@@ -23,7 +24,7 @@ impl AudioFormat {
 
   fn ffmpeg_args(&self) -> Vec<&'static str> {
     match self {
-      AudioFormat::FLAC => vec!["-c:a", "flac", "-f", "flac"],
+      AudioFormat::FLAC | AudioFormat::Audacity => vec!["-c:a", "flac", "-f", "flac"],
       AudioFormat::WAV => vec!["-c:a", "pcm_s16le", "-f", "wav"],
       AudioFormat::AAC => vec!["-c:a", "aac", "-f", "ipod"],
       AudioFormat::ALAC => vec!["-c:a", "alac", "-f", "ipod"],
@@ -36,6 +37,14 @@ impl AudioFormat {
       AudioFormat::WAV => "wav",
       AudioFormat::AAC => "AAC (MPEG-4)",
       AudioFormat::ALAC => "ALAC (Apple Lossless)",
+      AudioFormat::Audacity => "Audacity Project",
+    }
+  }
+
+  pub fn is_project_format(&self) -> bool {
+    match self {
+      AudioFormat::Audacity => true,
+      _ => false
     }
   }
 }
@@ -46,13 +55,25 @@ pub enum ProcessProgress {
   Error(anyhow::Error),
 }
 
+pub static AUP_HEADER: &str = concat!(
+  "<?xml version=\"1.0\" standalone=\"no\" ?>\n",
+  "<!DOCTYPE project PUBLIC \"-//audacityproject-1.3.0//DTD//EN\" \"http://audacity.sourceforge.net/xml/audacityproject-1.3.0.dtd\" >\n",
+  "<project xmlns=\"http://audacity.sourceforge.net/xml/\" projname=\"Craig\" version=\"1.3.0\" audacityversion=\"2.2.2\" rate=\"48000.0\">\n"
+);
+
+pub static AUP_FOLDER_NAME: &'static str = "craig_data";
+
 pub async fn process_files(
   resource_path: PathBuf,
-  output_path: PathBuf,
+  root_output_path: PathBuf,
   format: AudioFormat,
   use_dynaudnorm: bool,
   mix: bool,
 ) -> anyhow::Result<()> {
+  let mut output_path = root_output_path.clone();
+  if format.is_project_format() {
+    output_path.push(AUP_FOLDER_NAME);
+  }
   // Create output directory if it doesn't exist
   tokio::fs::create_dir_all(&output_path).await?;
 
@@ -72,6 +93,8 @@ pub async fn process_files(
       flac_files.push(path);
     }
   }
+
+  let mut result_files = Vec::new();
 
   if mix && !flac_files.is_empty() {
     // Mix all tracks into one file
@@ -118,15 +141,14 @@ pub async fn process_files(
     filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[aud]"));
     command.args(&["-filter_complex", &filter]);
     command.args(&["-map", "[aud]"]);
-    
-    // Add format-specific encoder args
+
     command.args(format.ffmpeg_args());
-    
-    // Set output path
-    let mut mix_output = output_path.join("craig");
-    mix_output.set_extension(format.extension());
-    command.arg(&mix_output);
-    
+
+    let mut file_output_path = output_path.join("craig");
+    file_output_path.set_extension(format.extension());
+    result_files.push(file_output_path.file_name().unwrap().to_owned());
+    command.arg(&file_output_path);
+
     println!("Running mix command");
     let status = command
       .stdout(Stdio::null())
@@ -140,28 +162,26 @@ pub async fn process_files(
   } else {
     // Process files individually
     for input_path in flac_files {
-      let mut output_path = output_path.join(
+      let mut file_output_path = output_path.join(
         input_path
           .file_name()
           .ok_or_else(|| anyhow::anyhow!("Invalid input filename"))?,
       );
-      output_path.set_extension(format.extension());
+      file_output_path.set_extension(format.extension());
 
-      println!("Converting {:?} to {:?}", input_path, output_path);
+      println!("Converting {:?} to {:?}", input_path, file_output_path);
 
       let mut command = Command::new(&ffmpeg);
       command.arg("-y").arg("-i").arg(&input_path);
 
-      // Add dynaudnorm filter if enabled
       if use_dynaudnorm {
         command.args(&["-af", "dynaudnorm"]);
       }
 
-      // Add format-specific encoder args
       command.args(format.ffmpeg_args());
 
-      // Add output path
-      command.arg(&output_path);
+      result_files.push(file_output_path.file_name().unwrap().to_owned());
+      command.arg(&file_output_path);
 
       let status = command
         .stdout(Stdio::null())
@@ -173,6 +193,21 @@ pub async fn process_files(
         return Err(anyhow::anyhow!("ffmpeg failed with status: {}", status));
       }
     }
+  }
+
+
+  if format.is_project_format() {
+    // Create Audacity project file
+    let mut aup = AUP_HEADER.to_owned();
+    for file in result_files {
+      aup.push_str(&format!(
+        "\t<import filename=\"{}\" offset=\"0.00000000\" mute=\"0\" solo=\"0\" height=\"150\" minimized=\"0\" gain=\"1.0\" pan=\"0.0\"/>\n",
+        file.to_string_lossy()
+      ));
+    }
+    aup.push_str("</project>");
+
+    tokio::fs::write(root_output_path.join("craig.aup"), aup).await?;
   }
 
   Ok(())
