@@ -1,6 +1,7 @@
 /target
 /_*
-*.flac
+*.{flac,wav,m4a}
+*.aup
 *.exe
 *.upx
 *.bat

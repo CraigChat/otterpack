@@ -193,15 +193,11 @@ impl eframe::App for TemplateApp {
           ui.spacing_mut().item_spacing.x = 0.0;
           ui.label("Executable created with ");
           ui.hyperlink_to("Craig", "https://craig.chat");
+          ui.label(" using ");
+          ui.hyperlink_to("otterpack", "https://github.com/CraigChat/otterpack");
+            ui.label(egui::RichText::new(format!(" ({}) ", env!("CARGO_PKG_VERSION"))).small());
           ui.label(".");
         });
-        // Show temp directory
-        if let Some(resources) = &self.resources {
-          if let Some(temp_dir) = &resources.temp_dir {
-            let dir = temp_dir.path().to_string_lossy().to_string();
-            ui.label(egui::RichText::new(format!("Temp Folder: {dir}")).small());
-          }
-        }
         egui::warn_if_debug_build(ui);
       });
     });

@@ -1,0 +1,69 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build Release
+      run: cargo build --release
+
+    - name: Install UPX
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v4.2.1/upx-4.2.1-win64.zip" -OutFile "upx.zip"
+        Expand-Archive "upx.zip" -DestinationPath "upx"
+        Copy-Item "upx\upx-4.2.1-win64\upx.exe" -Destination "."
+
+    - name: Create UPX compressed build
+      run: |
+        Copy-Item "target\release\otterpack.exe" -Destination "otterpack-upx.exe"
+        .\upx.exe --best --lzma "otterpack-upx.exe"
+
+    - name: Upload regular build
+      uses: actions/upload-artifact@v3
+      with:
+        name: otterpack
+        path: target/release/otterpack.exe
+
+    - name: Upload UPX build
+      uses: actions/upload-artifact@v3
+      with:
+        name: otterpack-upx
+        path: otterpack-upx.exe
+
+    - name: Upload Release Assets
+      if: github.event_name == 'release'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release upload ${{ github.event.release.tag_name }} target/release/otterpack.exe#otterpack.exe
+        gh release upload ${{ github.event.release.tag_name }} otterpack-upx.exe#otterpack-upx.exe
