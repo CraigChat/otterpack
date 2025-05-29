@@ -132,6 +132,9 @@ pub async fn process_files(
     command.args(["-filter_complex", &filter]);
     command.args(["-map", "[aud]"]);
 
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000);
+
     command.args(format.ffmpeg_args());
 
     let mut file_output_path = output_path.join("craig");
@@ -171,6 +174,9 @@ pub async fn process_files(
 
       result_files.push(file_output_path.file_name().unwrap().to_owned());
       command.arg(&file_output_path);
+
+      #[cfg(target_os = "windows")]
+      command.creation_flags(0x08000000);
 
       let status = command.status().await?;
 

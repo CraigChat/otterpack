@@ -186,6 +186,7 @@ impl eframe::App for TemplateApp {
           }
         } else if self.status == AppStatus::Processing {
           ui.heading("Processing files...");
+
           // Check for completion
           if let Some(rx) = &mut self.progress_rx {
             if let Ok(AppProgress::Process(progress)) = rx.try_recv() {
