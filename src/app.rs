@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
-use crate::{AudioFormat, ProcessProgress, process_files, self_extract::ExtractedResources};
+use crate::{
+  AudioFormat, ProcessProgress, ProgressInfo, process_files, self_extract::ExtractedResources,
+};
 
 #[derive(PartialEq)]
 enum AppStatus {
@@ -13,7 +15,7 @@ enum AppStatus {
   Done,
 }
 
-enum AppProgress {
+pub enum AppProgress {
   ResourceSetup(anyhow::Result<ExtractedResources>),
   Process(ProcessProgress),
 }
@@ -24,6 +26,7 @@ pub struct TemplateApp {
   runtime: tokio::runtime::Handle,
   resources: Option<ExtractedResources>,
   progress_rx: Option<mpsc::UnboundedReceiver<AppProgress>>,
+  progress_info: Option<ProgressInfo>,
   selected_format: AudioFormat,
   dynaudnorm: bool,
   mix: bool,
@@ -37,6 +40,7 @@ impl Default for TemplateApp {
       runtime,
       resources: None,
       progress_rx: None,
+      progress_info: None,
       output_path: {
         let folder = if cfg!(debug_assertions) {
           "out".to_string()
@@ -171,8 +175,15 @@ impl eframe::App for TemplateApp {
 
               // Spawn the async task
               self.runtime.spawn(async move {
-                let result =
-                  process_files(resource_path, output_path, format, use_dynaudnorm, mix).await;
+                let result = process_files(
+                  resource_path,
+                  output_path,
+                  format,
+                  use_dynaudnorm,
+                  mix,
+                  progress_tx.clone(),
+                )
+                .await;
                 match result {
                   Ok(_) => {
                     let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Finished));
@@ -187,22 +198,46 @@ impl eframe::App for TemplateApp {
         } else if self.status == AppStatus::Processing {
           ui.heading("Processing files...");
 
+          if let Some(info) = &self.progress_info {
+            ui.add_space(8.0);
+            ui.label(format!(
+              "Converting file {} of {}: {}",
+              info.current + 1,
+              info.total,
+              info.filename
+            ));
+            let progress = (info.current as f32) / (info.total as f32);
+            ui.add(
+              egui::ProgressBar::new(progress)
+                .show_percentage()
+                .animate(true),
+            );
+          }
+
           // Check for completion
           if let Some(rx) = &mut self.progress_rx {
             if let Ok(AppProgress::Process(progress)) = rx.try_recv() {
               match progress {
                 ProcessProgress::Error(e) => {
                   self.progress_rx = None;
+                  self.progress_info = None;
                   self.status = AppStatus::Error(format!("Failed to process: {}", e));
+                  ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(
+                    egui::UserAttentionType::Critical,
+                  ));
                 }
                 ProcessProgress::Finished => {
                   self.progress_rx = None;
+                  self.progress_info = None;
                   self.status = AppStatus::Done;
+                  ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(
+                    egui::UserAttentionType::Critical,
+                  ));
+                }
+                ProcessProgress::Processing(info) => {
+                  self.progress_info = Some(info);
                 }
               }
-              ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(
-                egui::UserAttentionType::Critical,
-              ));
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
           }

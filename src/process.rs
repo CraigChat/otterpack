@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use strum::EnumIter;
 use tokio::process::Command;
 
+use crate::app::AppProgress;
+
 #[derive(Debug, Clone, Copy, PartialEq, EnumIter)]
 pub enum AudioFormat {
   FLAC,
@@ -50,6 +52,14 @@ impl AudioFormat {
 pub enum ProcessProgress {
   Finished,
   Error(anyhow::Error),
+  Processing(ProgressInfo),
+}
+
+#[derive(Debug)]
+pub struct ProgressInfo {
+  pub filename: String,
+  pub current: usize,
+  pub total: usize,
 }
 
 pub static AUP_HEADER: &str = concat!(
@@ -66,6 +76,7 @@ pub async fn process_files(
   format: AudioFormat,
   use_dynaudnorm: bool,
   mix: bool,
+  completion_tx: tokio::sync::mpsc::UnboundedSender<AppProgress>,
 ) -> anyhow::Result<()> {
   let mut output_path = root_output_path.clone();
   if format.is_project_format() {
@@ -96,6 +107,14 @@ pub async fn process_files(
   if mix && !flac_files.is_empty() {
     // Mix all tracks into one file
     println!("Mixing {} tracks together", flac_files.len());
+
+    let _ = completion_tx.send(AppProgress::Process(ProcessProgress::Processing(
+      ProgressInfo {
+        filename: "Mixed output".to_string(),
+        current: 0,
+        total: 1,
+      },
+    )));
 
     // Create the filter complex string in chunks of 32 files
     let mut filter = String::new();
@@ -153,12 +172,23 @@ pub async fn process_files(
     }
   } else {
     // Process files individually
-    for input_path in flac_files {
-      let mut file_output_path = output_path.join(
-        input_path
-          .file_name()
-          .ok_or_else(|| anyhow::anyhow!("Invalid input filename"))?,
-      );
+    let total_files = flac_files.len();
+    for (current_index, input_path) in flac_files.into_iter().enumerate() {
+      let filename = input_path
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("Invalid input filename"))?
+        .to_string_lossy()
+        .to_string();
+
+      let _ = completion_tx.send(AppProgress::Process(ProcessProgress::Processing(
+        ProgressInfo {
+          filename: filename.clone(),
+          current: current_index,
+          total: total_files,
+        },
+      )));
+
+      let mut file_output_path = output_path.join(&filename);
       file_output_path.set_extension(format.extension());
 
       println!("Converting {:?} to {:?}", input_path, file_output_path);
