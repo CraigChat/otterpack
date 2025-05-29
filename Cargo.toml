@@ -25,3 +25,6 @@ opt-level = 0
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[build-dependencies]
+winres = "0.1.12"

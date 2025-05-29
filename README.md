@@ -1,4 +1,4 @@
-# otterpack
+# otterpack 🦦
 
 otterpack is a self-extracting Windows executable, used for [Craig](https://craig.chat)'s Windows Executable download format.
 
@@ -20,4 +20,7 @@ cat otterpack.exe recording.zip > otterpack-packed.exe
 - I wanted to try out Rust some more.
 
 ---
+
+The icon is an otter from [Fluent Emoji](https://github.com/microsoft/fluentui-emoji).
+
 This is project is licensed under [MIT](/LICENSE).

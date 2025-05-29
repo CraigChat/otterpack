@@ -140,9 +140,7 @@ pub async fn process_files(
     command.arg(&file_output_path);
 
     println!("Running mix command");
-    let status = command
-      .status()
-      .await?;
+    let status = command.status().await?;
 
     if !status.success() {
       return Err(anyhow::anyhow!(
@@ -174,9 +172,7 @@ pub async fn process_files(
       result_files.push(file_output_path.file_name().unwrap().to_owned());
       command.arg(&file_output_path);
 
-      let status = command
-        .status()
-        .await?;
+      let status = command.status().await?;
 
       if !status.success() {
         return Err(anyhow::anyhow!("ffmpeg failed with status: {}", status));

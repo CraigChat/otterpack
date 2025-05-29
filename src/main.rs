@@ -1,7 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use egui::IconData;
 use otterpack::TemplateApp;
 
 fn main() -> eframe::Result {
@@ -14,7 +13,10 @@ fn main() -> eframe::Result {
     viewport: egui::ViewportBuilder::default()
       .with_inner_size([500.0, 200.0])
       .with_min_inner_size([500.0, 200.0])
-      .with_icon(IconData::default())
+      .with_icon(
+        eframe::icon_data::from_png_bytes(&include_bytes!("../assets/otter.png")[..])
+          .expect("Failed to load icon"),
+      )
       .with_active(true),
     ..Default::default()
   };
