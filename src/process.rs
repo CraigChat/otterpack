@@ -96,23 +96,17 @@ pub async fn process_files(
   if mix && !flac_files.is_empty() {
     // Mix all tracks into one file
     println!("Mixing {} tracks together", flac_files.len());
-    
+
     // Create the filter complex string in chunks of 32 files
     let mut filter = String::new();
     let mut mix_filter = String::new();
 
     let mut command = Command::new(&ffmpeg);
     command.arg("-y");
-    
+
     // Add all input files
     let mut co = 0;
-    let mix_extra = {
-      if use_dynaudnorm {
-        ",dynaudnorm"
-      } else {
-        ""
-      }
-    };
+    let mix_extra = { if use_dynaudnorm { ",dynaudnorm" } else { "" } };
     for (i, file) in flac_files.iter().enumerate() {
       command.arg("-i").arg(file);
       let input_filter = {
@@ -126,11 +120,10 @@ pub async fn process_files(
       mix_filter.push_str(&format!("[aud{co}]"));
       co += 1;
 
-        
       // amix can only mix 32 at a time
       if co >= 32 {
         filter.push_str(&format!("{mix_filter} amix={co}{mix_extra}[aud{co}];"));
-        mix_filter = format!("[aud{co}]") ;
+        mix_filter = format!("[aud{co}]");
         co = 1;
       }
     }
@@ -152,9 +145,12 @@ pub async fn process_files(
       .stderr(Stdio::null())
       .status()
       .await?;
-      
+
     if !status.success() {
-      return Err(anyhow::anyhow!("ffmpeg mixing failed with status: {}", status));
+      return Err(anyhow::anyhow!(
+        "ffmpeg mixing failed with status: {}",
+        status
+      ));
     }
   } else {
     // Process files individually
@@ -191,7 +187,6 @@ pub async fn process_files(
       }
     }
   }
-
 
   if format.is_project_format() {
     // Create Audacity project file

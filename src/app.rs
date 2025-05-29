@@ -170,7 +170,9 @@ impl eframe::App for TemplateApp {
               } else {
                 self.status = AppStatus::Done;
               }
-              ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Critical));
+              ctx.send_viewport_cmd(egui::viewport::ViewportCommand::RequestUserAttention(
+                egui::UserAttentionType::Critical,
+              ));
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
           }
@@ -195,7 +197,7 @@ impl eframe::App for TemplateApp {
           ui.hyperlink_to("Craig", "https://craig.chat");
           ui.label(" using ");
           ui.hyperlink_to("otterpack", "https://github.com/CraigChat/otterpack");
-            ui.label(egui::RichText::new(format!(" ({}) ", env!("CARGO_PKG_VERSION"))).small());
+          ui.label(egui::RichText::new(format!(" ({}) ", env!("CARGO_PKG_VERSION"))).small());
           ui.label(".");
         });
         egui::warn_if_debug_build(ui);
