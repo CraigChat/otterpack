@@ -3,12 +3,11 @@ use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
 use crate::{
-  AudioFormat, ProcessProgress, ProgressInfo, process_files, self_extract::ExtractedResources,
+  AudioFormat, PackSource, ProcessProgress, ProgressInfo, process_files, setup_resources,
 };
 
 #[derive(PartialEq)]
 enum AppStatus {
-  Unpacking,
   Ready,
   Processing,
   Error(String),
@@ -16,7 +15,6 @@ enum AppStatus {
 }
 
 pub enum AppProgress {
-  ResourceSetup(anyhow::Result<ExtractedResources>),
   Process(ProcessProgress),
 }
 
@@ -24,7 +22,7 @@ pub struct TemplateApp {
   status: AppStatus,
   output_path: PathBuf,
   runtime: tokio::runtime::Handle,
-  resources: Option<ExtractedResources>,
+  source: Option<PackSource>,
   progress_rx: Option<mpsc::UnboundedReceiver<AppProgress>>,
   progress_info: Option<ProgressInfo>,
   selected_format: AudioFormat,
@@ -36,9 +34,9 @@ impl Default for TemplateApp {
   fn default() -> Self {
     let runtime = tokio::runtime::Handle::current();
     let mut app = Self {
-      status: AppStatus::Unpacking,
+      status: AppStatus::Ready,
       runtime,
-      resources: None,
+      source: None,
       progress_rx: None,
       progress_info: None,
       output_path: {
@@ -57,15 +55,14 @@ impl Default for TemplateApp {
       mix: false,
     };
 
-    // Setup channel for progress updates
-    let (progress_tx, progress_rx) = mpsc::unbounded_channel();
-    app.progress_rx = Some(progress_rx);
-
-    // Start resource extraction in background
-    app.runtime.spawn(async move {
-      let result = crate::self_extract::setup_resources().await;
-      let _ = progress_tx.send(AppProgress::ResourceSetup(result));
-    });
+    match crate::self_extract::find_pack_source() {
+      Ok(source) => {
+        app.source = Some(source);
+      }
+      Err(e) => {
+        app.status = AppStatus::Error(format!("Failed to setup resources: {}", e));
+      }
+    }
 
     app
   }
@@ -84,24 +81,7 @@ impl TemplateApp {
 impl eframe::App for TemplateApp {
   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     egui::CentralPanel::default().show(ctx, |ui| {
-      if self.status == AppStatus::Unpacking {
-        ui.heading("Unpacking resources...");
-        // Check for completion
-        if let Some(rx) = &mut self.progress_rx {
-          if let Ok(AppProgress::ResourceSetup(result)) = rx.try_recv() {
-            match result {
-              Ok(resources) => {
-                self.resources = Some(resources);
-                self.status = AppStatus::Ready;
-              }
-              Err(e) => {
-                self.status = AppStatus::Error(format!("Failed to setup resources: {}", e));
-              }
-            }
-          }
-          ctx.request_repaint_after(std::time::Duration::from_millis(100));
-        }
-      } else if let AppStatus::Error(error) = &self.status {
+      if let AppStatus::Error(error) = &self.status {
         // Show error message at the top if there is one
         ui.colored_label(egui::Color32::RED, error);
         ui.add_space(32.0);
@@ -162,43 +142,47 @@ impl eframe::App for TemplateApp {
             .add_sized([ui.available_width(), 20.0], egui::Button::new("Go"))
             .clicked()
           {
-            if let Some(resources) = &self.resources {
-              let (progress_tx, progress_rx) = mpsc::unbounded_channel();
-              self.progress_rx = Some(progress_rx);
-              self.status = AppStatus::Processing;
+            let (progress_tx, progress_rx) = mpsc::unbounded_channel();
+            self.progress_rx = Some(progress_rx);
+            self.status = AppStatus::Processing;
 
-              let resource_path = resources.resource_path.clone();
-              let output_path = self.output_path.clone();
-              let format = self.selected_format;
-              let use_dynaudnorm = self.dynaudnorm;
-              let mix = self.mix;
+            let output_path = self.output_path.clone();
+            let format = self.selected_format;
+            let use_dynaudnorm = self.dynaudnorm;
+            let mix = self.mix;
 
-              // Spawn the async task
-              self.runtime.spawn(async move {
-                let result = process_files(
-                  resource_path,
-                  output_path,
-                  format,
-                  use_dynaudnorm,
-                  mix,
-                  progress_tx.clone(),
-                )
-                .await;
-                match result {
-                  Ok(_) => {
-                    let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Finished));
-                  }
-                  Err(e) => {
-                    let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Error(e)));
+            // Spawn the async task
+            self.runtime.spawn(async move {
+              let result = setup_resources().await;
+              match result {
+                Ok(resources) => {
+                  let result = process_files(
+                    resources.resource_path,
+                    output_path,
+                    format,
+                    use_dynaudnorm,
+                    mix,
+                    progress_tx.clone(),
+                  )
+                  .await;
+                  match result {
+                    Ok(_) => {
+                      let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Finished));
+                    }
+                    Err(e) => {
+                      let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Error(e)));
+                    }
                   }
                 }
-              });
-            }
+                Err(e) => {
+                  let _ = progress_tx.send(AppProgress::Process(ProcessProgress::Error(e)));
+                }
+              }
+            });
           }
         } else if self.status == AppStatus::Processing {
-          ui.heading("Processing files...");
-
           if let Some(info) = &self.progress_info {
+            ui.heading("Processing files...");
             ui.add_space(8.0);
             ui.label(format!(
               "Converting file {} of {}: {}",
@@ -212,6 +196,8 @@ impl eframe::App for TemplateApp {
                 .show_percentage()
                 .animate(true),
             );
+          } else {
+            ui.heading("Unpacking files...");
           }
 
           // Check for completion

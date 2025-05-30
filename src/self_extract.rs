@@ -70,7 +70,7 @@ pub fn find_pack_source() -> Result<PackSource> {
   }
 }
 
-fn extract_zip_contents(source: &PackSource) -> Result<tempfile::TempDir> {
+pub fn extract_zip_contents(source: &PackSource) -> Result<tempfile::TempDir> {
   match source {
     PackSource::EmbeddedZip {
       exe_path,
